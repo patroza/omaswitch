@@ -5,16 +5,19 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 
-// Keyboard-first window switcher overlay.
+// Keyboard-first window switcher overlay with a live window peek.
 //
 // Opened with `omarchy-shell shell toggle piyush.window-switcher` (bind it to
 // a key in ~/.config/hypr/bindings.lua). Lists Hyprland toplevels from the
 // Quickshell Hyprland singleton, filters live as you type, and focuses the
 // selection with a hyprctl dispatch (same call omarchy's own focus helpers use).
 //
-// v1 scope, deliberately small: no thumbnails, no MRU ordering, no per-workspace
-// groups. It lists all mapped toplevels once, keeps the order Hyprland reports
-// them in, and lets typing do the narrowing.
+// The right side shows a live preview (Windows-11-style "peek") of the
+// highlighted window via a single ScreencopyView bound to that window's
+// Wayland toplevel handle. One live stream, not one per window. If the
+// compositor lacks the hyprland-toplevel-export protocol (or the view gets
+// no frames), hasContent stays false and the list simply stays full-width —
+// the same layout as the plain list version.
 
 Item {
   id: root
@@ -33,10 +36,30 @@ Item {
   property var allWindows: []
   property var rows: []
 
+  readonly property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
   readonly property int rowHeight: Math.max(Style.space(48), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
-  readonly property int cardWidth: Math.min(Style.space(760), panel.width - Style.gapsOut * 2)
-  readonly property int cardHeight: Math.min(rows.length * rowHeight + Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2), panel.height - Style.gapsOut * 2)
   readonly property int contentMargin: Style.spacing.panelPadding
+  readonly property int gap: Style.space(12)
+
+  // The row the keyboard cursor is on; the preview follows it.
+  readonly property var selectedToplevel: rows.length > 0 ? rows[selectedIndex] : null
+  // Whether the compositor can export this window at all (has .wayland).
+  readonly property bool previewWanted: root.opened && root.selectedToplevel !== null && !!root.selectedToplevel.wayland
+  // Actually showing the peek: only once the view has produced a frame.
+  readonly property bool previewActive: root.previewWanted && previewView.hasContent
+
+  readonly property int cardWidth: Math.min(root.previewActive ? Style.space(1080) : Style.space(760), panel.width - Style.gapsOut * 2)
+  readonly property int cardHeight: Math.min(
+    root.previewActive
+      ? Math.max(rows.length * rowHeight + headerHeight, Style.space(400))
+      : rows.length * rowHeight + headerHeight,
+    panel.height - Style.gapsOut * 2)
+  readonly property int contentHeight: root.cardHeight - root.contentMargin * 2
+  readonly property int listWidth: root.previewActive ? Math.max(Style.space(300), Math.round(root.cardWidth * 0.40)) : root.cardWidth - root.contentMargin * 2
+  readonly property int previewWidth: root.previewActive ? root.cardWidth - root.listWidth - root.contentMargin - root.gap : 0
+  // Pane height = the Row's height inside the card (cardHeight minus margins).
+  readonly property int previewHeight: root.contentHeight
+  readonly property int listHeight: root.contentHeight - root.headerHeight - Style.space(4)
 
   property color background: Color.menu.background
   property color foreground: Color.menu.text
@@ -107,6 +130,15 @@ Item {
     root.opened = false
   }
 
+  // User-initiated dismissal (Esc / click outside). Mirrors omarchy.emojis:
+  // close() is the host contract; dismiss() also tells the shell to drop the
+  // openPanelIds entry so a later summon re-opens cleanly.
+  function dismiss() {
+    root.opened = false
+    if (root.shell && typeof root.shell.hide === "function")
+      root.shell.hide((root.manifest && root.manifest.id) || "piyush.window-switcher")
+  }
+
   // Keep the list fresh while open (windows open/close/rename).
   Connections {
     target: Hyprland
@@ -136,7 +168,7 @@ Item {
 
     MouseArea {
       anchors.fill: parent
-      onClicked: root.close()
+      onClicked: root.dismiss()
     }
 
     BorderSurface {
@@ -148,69 +180,98 @@ Item {
       color: root.background
       borderSpec: root.borderSpec
 
-      Column {
+      Row {
         anchors.fill: parent
         anchors.margins: root.contentMargin
+        spacing: root.gap
 
-        Text {
-          text: root.filterText === "" ? "Switch window…" : "Filter: " + root.filterText
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.title
-          elide: Text.ElideRight
-          width: parent.width
-        }
+        Column {
+          width: root.listWidth
+          height: parent.height
+          spacing: Style.space(4)
 
-        ListView {
-          id: listView
-          width: parent.width
-          height: Math.min(rows.length * root.rowHeight, card.height - Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2) - root.contentMargin * 2)
-          model: root.rows
-          clip: true
+          Text {
+            text: root.filterText === "" ? "Switch window…" : "Filter: " + root.filterText
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.title
+            elide: Text.ElideRight
+            width: parent.width
+          }
 
-          delegate: Item {
-            required property var modelData
-            required property int index
-            width: listView.width
-            height: root.rowHeight
+          ListView {
+            id: listView
+            width: parent.width
+            height: root.listHeight
+            model: root.rows
+            clip: true
 
-            Rectangle {
-              anchors.fill: parent
-              radius: root.cornerRadius
-              color: index === root.selectedIndex ? root.selectedBackground : "transparent"
-            }
+            delegate: Item {
+              required property var modelData
+              required property int index
+              width: listView.width
+              height: root.rowHeight
 
-            Column {
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
-              anchors.leftMargin: Style.space(10)
-              width: parent.width - Style.space(20)
-              spacing: 2
-
-              Text {
-                text: root.windowLabel(modelData)
-                color: index === root.selectedIndex ? root.selectedText : root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                elide: Text.ElideRight
-                width: parent.width
+              Rectangle {
+                anchors.fill: parent
+                radius: root.cornerRadius
+                color: index === root.selectedIndex ? root.selectedBackground : "transparent"
               }
-              Text {
-                text: root.windowDetail(modelData)
-                color: index === root.selectedIndex ? root.selectedText : root.foreground
-                opacity: 0.6
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                elide: Text.ElideRight
-                width: parent.width
-              }
-            }
 
-            MouseArea {
-              anchors.fill: parent
-              onClicked: { root.selectedIndex = index; root.focusSelected() }
+              Column {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(10)
+                width: parent.width - Style.space(20)
+                spacing: 2
+
+                Text {
+                  text: root.windowLabel(modelData)
+                  color: index === root.selectedIndex ? root.selectedText : root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  elide: Text.ElideRight
+                  width: parent.width
+                }
+                Text {
+                  text: root.windowDetail(modelData)
+                  color: index === root.selectedIndex ? root.selectedText : root.foreground
+                  opacity: 0.6
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                  width: parent.width
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                onClicked: { root.selectedIndex = index; root.focusSelected() }
+              }
             }
           }
+        }
+
+        // Right-side peek pane. Only visible once the view actually has a
+        // frame; width collapses to 0 and the list takes the whole card when
+        // the compositor cannot export windows.
+        BorderSurface {
+          visible: root.previewActive
+          width: root.previewWidth
+          height: parent.height
+          radius: root.cornerRadius
+          color: Qt.rgba(0, 0, 0, 0.25)
+          borderSpec: Border.surfaceSpec("popups", "border", root.border, Math.max(1, Style.space(1)))
+          clip: true
+
+          ScreencopyView {
+            id: previewView
+            anchors.fill: parent
+            anchors.margins: Style.space(4)
+            captureSource: root.previewWanted ? root.selectedToplevel.wayland : null
+            live: root.opened
+            paintCursor: false
+            constraintSize: Qt.size(root.previewWidth, root.previewHeight)          }
         }
       }
     }
@@ -224,7 +285,7 @@ Item {
       Keys.priority: Keys.BeforeItem
       Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape) {
-          root.close()
+          root.dismiss()
           event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           root.focusSelected()
