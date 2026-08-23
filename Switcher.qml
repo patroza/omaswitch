@@ -8,7 +8,7 @@ import "Model.js" as Model
 
 // Keyboard-first window switcher overlay with a live window peek.
 //
-// Opened with `omarchy-shell shell toggle piyush.window-switcher` (bind it to
+// Opened with `omarchy-shell shell toggle piyush.omaswitch` (bind it to
 // a key in ~/.config/hypr/bindings.lua). Lists Hyprland toplevels from the
 // Quickshell Hyprland singleton, filters live as you type, and focuses the
 // selection through the native Wayland toplevel API, with hyprctl as fallback.
@@ -140,7 +140,7 @@ Item {
     root.opened = false
     root.cycleMode = false
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "piyush.window-switcher")
+      root.shell.hide((root.manifest && root.manifest.id) || "piyush.omaswitch")
   }
 
   // Keep the list fresh while open (windows open/close/rename).
@@ -161,7 +161,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "piyush-window-switcher"
+    WlrLayershell.namespace: "piyush-omaswitch"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore

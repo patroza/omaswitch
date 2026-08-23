@@ -1,10 +1,10 @@
-# Omarchy Window Switcher
+# OmaSwitch
 
 **A familiar `Alt+Tab` switcher for Omarchy—with live window previews.**
 
-Omarchy Window Switcher puts your recently used windows in one fast, keyboard-first overlay. Cycle through them with `Alt+Tab`, type to find one by name, and see a live preview of the highlighted window before you switch.
+OmaSwitch puts your recently used windows in one fast, keyboard-first overlay. Cycle through them with `Alt+Tab`, type to find one by name, and see a live preview of the highlighted window before you switch.
 
-![Omarchy Window Switcher showing a live terminal preview](preview.png)
+![OmaSwitch showing a live terminal preview](preview.png)
 
 ## Why you will like it
 
@@ -20,18 +20,18 @@ Omarchy Window Switcher puts your recently used windows in one fast, keyboard-fi
 
 Search or cycle through windows, then confirm with Enter (or release Alt when the compositor forwards the release event).
 
-![Window Switcher with a project terminal preview](screenshots/terminal-preview.png)
+![OmaSwitch with a project terminal preview](screenshots/terminal-preview.png)
 
 ### Check a live `btop` preview before switching
 
 The preview changes with the selected row, making similarly named windows easy to distinguish.
 
-![Window Switcher with a live btop preview](screenshots/btop-preview.png)
+![OmaSwitch with a live btop preview](screenshots/btop-preview.png)
 
 ## Add it to Omarchy
 
 ```bash
-omarchy plugin add https://github.com/piyush97/omarchy-window-switcher.git --enable
+omarchy plugin add https://github.com/piyush97/omaswitch.git --enable
 ```
 
 No `sudo`, extra package, service, or configuration file is required.
@@ -46,8 +46,8 @@ Omarchy binds `Alt+Tab` to direct cycling by default. Add this to `~/.config/hyp
 hl.unbind("ALT + TAB")
 hl.unbind("ALT + SHIFT + TAB")
 
-o.bind("ALT + TAB", "Window switcher", "omarchy-shell shell summon piyush.window-switcher '{\"mode\":\"cycle\",\"direction\":1}'")
-o.bind("ALT + SHIFT + TAB", "Window switcher (reverse)", "omarchy-shell shell summon piyush.window-switcher '{\"mode\":\"cycle\",\"direction\":-1}'")
+o.bind("ALT + TAB", "OmaSwitch", "omarchy-shell shell summon piyush.omaswitch '{\"mode\":\"cycle\",\"direction\":1}'")
+o.bind("ALT + SHIFT + TAB", "OmaSwitch (reverse)", "omarchy-shell shell summon piyush.omaswitch '{\"mode\":\"cycle\",\"direction\":-1}'")
 ```
 
 Then reload Hyprland:
@@ -76,20 +76,20 @@ hyprctl configerrors
 To open the searchable picker directly:
 
 ```bash
-omarchy-shell shell toggle piyush.window-switcher
+omarchy-shell shell toggle piyush.omaswitch
 ```
 
 ## Keep it current
 
 ```bash
-omarchy plugin update piyush.window-switcher --yes
+omarchy plugin update piyush.omaswitch --yes
 ```
 
 To disable or remove it:
 
 ```bash
-omarchy plugin disable piyush.window-switcher
-omarchy plugin remove piyush.window-switcher --yes
+omarchy plugin disable piyush.omaswitch
+omarchy plugin remove piyush.omaswitch --yes
 ```
 
 ## Troubleshooting
@@ -108,7 +108,7 @@ Confirm that the original bindings were unbound, then run:
 ```bash
 hyprctl reload
 hyprctl configerrors
-omarchy menu keybindings --print | grep -E 'ALT \+ TAB|SHIFT ALT \+ TAB|Window switcher'
+omarchy menu keybindings --print | grep -E 'ALT \+ TAB|SHIFT ALT \+ TAB|OmaSwitch'
 ```
 
 **The plugin opens without a preview**
@@ -118,7 +118,7 @@ The selected window may not be capturable, or `hyprland-toplevel-export-v1` may 
 **The plugin reports a QML error**
 
 ```bash
-journalctl --user -f | grep -Ei 'piyush.window-switcher|Switcher.qml|qml.*(error|warning)'
+journalctl --user -f | grep -Ei 'piyush.omaswitch|Switcher.qml|qml.*(error|warning)'
 ```
 
 ## Development
