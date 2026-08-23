@@ -1,46 +1,46 @@
 # Omarchy Window Switcher
 
-A Windows-style `Alt+Tab` switcher for Omarchy with MRU ordering, repeated-key cycling, type-to-filter search, and one live preview of the selected window.
+**A familiar `Alt+Tab` switcher for Omarchy—with live window previews.**
 
-![Omarchy Window Switcher](preview.png)
+Omarchy Window Switcher puts your recently used windows in one fast, keyboard-first overlay. Cycle through them with `Alt+Tab`, type to find one by name, and see a live preview of the highlighted window before you switch.
 
-## Features
+![Omarchy Window Switcher showing a live terminal preview](preview.png)
 
-- Recent-window-first ordering from Hyprland focus history
-- Repeated `Alt+Tab` cycles without closing or resetting the overlay
-- Search by window title, application, or workspace
-- One live screencopy stream for the highlighted window
-- List-only fallback when a window cannot be captured
-- Native Wayland activation with a `hyprctl` fallback
-- Keyboard-first controls with mouse selection and click-outside dismissal
-- No extra packages, services, permissions, or configuration files required
+## Why you will like it
 
-## Requirements
+- **Recent windows first.** Uses Hyprland focus history, so the window you want is usually next.
+- **Preview before switching.** A live preview follows the selected row instead of showing stale screenshots.
+- **Made for the keyboard.** Repeat `Alt+Tab`, search by typing, use arrows or Tab, then press Enter.
+- **Stays light.** Only the highlighted window gets a capture stream—never every row.
+- **Fits Omarchy.** Follows your active Omarchy theme and needs no daemon, packages, or privileges.
 
-- Omarchy with the Quickshell shell
-- Hyprland
-- `hyprland-toplevel-export-v1` for live previews
+## See it in action
 
-Window switching and search still work without toplevel export; only the preview pane is unavailable.
+### Pick the project window without leaving the keyboard
 
-## Install
+Search or cycle through windows, then confirm with Enter (or release Alt when the compositor forwards the release event).
+
+![Window Switcher with a project terminal preview](screenshots/terminal-preview.png)
+
+### Check a live `btop` preview before switching
+
+The preview changes with the selected row, making similarly named windows easy to distinguish.
+
+![Window Switcher with a live btop preview](screenshots/btop-preview.png)
+
+## Add it to Omarchy
 
 ```bash
-omarchy plugin add https://github.com/piyush97/omarchy-window-switcher.git --enable --yes
+omarchy plugin add https://github.com/piyush97/omarchy-window-switcher.git --enable
 ```
 
-Confirm that Omarchy discovered and enabled it:
+No `sudo`, extra package, service, or configuration file is required.
 
-```bash
-omarchy plugin list --json \
-  | jq '.[] | select(.id == "piyush.window-switcher")'
-```
+> Live previews require Hyprland's `hyprland-toplevel-export-v1` protocol. If it is unavailable, switching and search still work; the plugin simply uses its list-only layout.
 
-For a private fork, Git must already be authenticated to GitHub. No `sudo` or additional package installation is needed.
+## Make it your Alt+Tab switcher
 
-## Set up Alt+Tab
-
-Omarchy normally binds these keys to direct window cycling. Replace those bindings in `~/.config/hypr/bindings.lua`:
+Omarchy binds `Alt+Tab` to direct cycling by default. Add this to `~/.config/hypr/bindings.lua` to replace those two bindings:
 
 ```lua
 hl.unbind("ALT + TAB")
@@ -50,110 +50,72 @@ o.bind("ALT + TAB", "Window switcher", "omarchy-shell shell summon piyush.window
 o.bind("ALT + SHIFT + TAB", "Window switcher (reverse)", "omarchy-shell shell summon piyush.window-switcher '{\"mode\":\"cycle\",\"direction\":-1}'")
 ```
 
-Reload and validate Hyprland:
+Then reload Hyprland:
 
 ```bash
 hyprctl reload
 hyprctl configerrors
 ```
 
-`configerrors` should return no errors. If you prefer not to replace the defaults, run the summon command directly or bind it to another key.
+`configerrors` should print no errors. If you want to keep Omarchy's default bindings, bind either summon command to another key instead.
 
-## Use it
+## Familiar from the first keypress
 
-### Alt+Tab mode
+| Shortcut | What it does |
+| --- | --- |
+| `Alt+Tab` | Open the switcher and move to the next recent window |
+| `Alt+Shift+Tab` | Open the switcher and move backward |
+| `Tab`, `Down`, `Right` | Select the next window |
+| `Shift+Tab`, `Up`, `Left` | Select the previous window |
+| Type | Filter by title, application, or workspace |
+| `Backspace` / `Ctrl+Backspace` | Delete a character / word from the search |
+| `Ctrl+U` | Clear the search |
+| `Enter` or click | Focus the selected window |
+| `Esc` or click outside | Close without switching |
 
-1. Hold `Alt` and press `Tab` to open the switcher.
-2. Press `Tab` repeatedly to move forward, or `Alt+Shift+Tab` to move backward.
-3. Release `Alt` to activate the highlighted window. `Enter` always activates it.
-4. Press `Esc` or click outside to cancel.
-
-If the compositor does not forward the modifier-release event, use `Enter` or click the selected row.
-
-### Search mode
-
-Open the picker without a cycle payload:
+To open the searchable picker directly:
 
 ```bash
 omarchy-shell shell toggle piyush.window-switcher
 ```
 
-Then type to filter by title, application, or workspace.
-
-| Key | Action |
-| --- | --- |
-| `Tab`, `Down`, `Right` | Next window |
-| `Shift+Tab`, `Up`, `Left` | Previous window |
-| Type | Filter windows |
-| `Backspace` | Delete one character |
-| `Ctrl+Backspace` | Delete one word |
-| `Ctrl+U` | Clear the search |
-| `Enter` or click | Focus the selected window |
-| `Esc` or click outside | Close without switching |
-
-## Screenshots
-
-The preview updates as the highlighted window changes:
-
-![Live terminal preview](screenshots/terminal-preview.png)
-
-![Live btop preview](screenshots/btop-preview.png)
-
-`preview.png` is also the marketplace preview image used by Omarchy plugin directories.
-
-## Update, disable, and remove
-
-Update an installed copy:
+## Keep it current
 
 ```bash
 omarchy plugin update piyush.window-switcher --yes
 ```
 
-Disable it temporarily:
+To disable or remove it:
 
 ```bash
 omarchy plugin disable piyush.window-switcher
-```
-
-Enable it again:
-
-```bash
-omarchy plugin enable piyush.window-switcher
-```
-
-Remove it:
-
-```bash
 omarchy plugin remove piyush.window-switcher --yes
 ```
 
 ## Troubleshooting
 
-### The plugin is not listed
-
-Rescan the shell, then check the plugin list again:
+**The plugin is not listed**
 
 ```bash
 omarchy-shell shell rescanPlugins
 omarchy plugin list --json
 ```
 
-### The overlay opens but has no preview
+**Alt+Tab still directly cycles windows**
 
-This is expected when the selected window does not expose a capturable Wayland toplevel, or when `hyprland-toplevel-export-v1` is unavailable. Switching and search continue to work in list-only mode.
-
-### Alt+Tab still directly switches windows
-
-Check that the two original bindings were unbound, then reload Hyprland and verify:
+Confirm that the original bindings were unbound, then run:
 
 ```bash
-omarchy menu keybindings --print | grep -E 'ALT \\+ TAB|SHIFT ALT \\+ TAB|Window switcher'
+hyprctl reload
 hyprctl configerrors
+omarchy menu keybindings --print | grep -E 'ALT \+ TAB|SHIFT ALT \+ TAB|Window switcher'
 ```
 
-### The plugin loads with errors
+**The plugin opens without a preview**
 
-Inspect the shell log:
+The selected window may not be capturable, or `hyprland-toplevel-export-v1` may be unavailable. This is expected fallback behavior; the list remains fully usable.
+
+**The plugin reports a QML error**
 
 ```bash
 journalctl --user -f | grep -Ei 'piyush.window-switcher|Switcher.qml|qml.*(error|warning)'
@@ -161,20 +123,10 @@ journalctl --user -f | grep -Ei 'piyush.window-switcher|Switcher.qml|qml.*(error
 
 ## Development
 
-Run the lightweight checks from the repository root:
-
 ```bash
 node test_model.js
 omarchy plugin validate .
 git diff --check
 ```
 
-During local development, copy or clone the repository under `~/.config/omarchy/plugins/piyush.window-switcher/`. The Omarchy shell hot-reloads plugin changes; force discovery with:
-
-```bash
-omarchy-shell shell rescanPlugins
-```
-
-## Design notes
-
-The plugin intentionally creates only one live preview stream for the selected window. It does not create thumbnails for every row or store persistent window history, keeping Alt+Tab responsive and GPU usage predictable.
+The plugin is MIT licensed; see [LICENSE](LICENSE). It is an independent community plugin and is not affiliated with Omarchy.
