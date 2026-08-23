@@ -28,7 +28,6 @@ Item {
   property bool opened: false
   property string filterText: ""
   property int selectedIndex: 0
-  property bool cursorActive: false
 
   // Raw toplevels (live objects from the Hyprland singleton) + filtered rows.
   property var allWindows: []
@@ -36,8 +35,7 @@ Item {
 
   readonly property int rowHeight: Math.max(Style.space(48), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
   readonly property int cardWidth: Math.min(Style.space(760), panel.width - Style.gapsOut * 2)
-  readonly property int cardHeight: Math.min(rows.length * rowHeight + headerHeight, panel.height - Style.gapsOut * 2)
-  readonly property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
+  readonly property int cardHeight: Math.min(rows.length * rowHeight + Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2), panel.height - Style.gapsOut * 2)
   readonly property int contentMargin: Style.spacing.panelPadding
 
   property color background: Color.menu.background
@@ -56,10 +54,9 @@ Item {
 
   function windowDetail(w) {
     if (!w) return ""
-    var parts = []
-    if (w.appId) parts.push(String(w.appId))
-    if (w.workspace) parts.push("ws " + String(w.workspace.id))
-    return parts.join(" · ")
+    var detail = w.appId ? String(w.appId) : ""
+    if (w.workspace) detail += (detail ? " · " : "") + "ws " + String(w.workspace.id)
+    return detail
   }
 
   function rebuildRows() {
@@ -102,7 +99,6 @@ Item {
     root.opened = true
     root.filterText = ""
     root.selectedIndex = 0
-    root.cursorActive = true
     root.refresh()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -110,13 +106,6 @@ Item {
   function close() {
     root.opened = false
   }
-
-  function toggle() {
-    if (root.opened) root.close()
-    else root.open("{}")
-  }
-
-  function ping() { return "ok" }
 
   // Keep the list fresh while open (windows open/close/rename).
   Connections {
@@ -162,7 +151,6 @@ Item {
       Column {
         anchors.fill: parent
         anchors.margins: root.contentMargin
-        spacing: root.contentSpacing
 
         Text {
           text: root.filterText === "" ? "Switch window…" : "Filter: " + root.filterText
@@ -176,7 +164,7 @@ Item {
         ListView {
           id: listView
           width: parent.width
-          height: Math.min(rows.length * root.rowHeight, card.height - root.headerHeight - root.contentMargin * 2)
+          height: Math.min(rows.length * root.rowHeight, card.height - Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2) - root.contentMargin * 2)
           model: root.rows
           clip: true
 
