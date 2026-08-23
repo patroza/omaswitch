@@ -34,7 +34,7 @@ The preview changes with the selected row, making similarly named windows easy t
 omarchy plugin add https://github.com/piyush97/omaswitch.git --enable
 ```
 
-No `sudo`, extra package, service, or configuration file is required.
+It installs in your user configuration and needs no extra package, service, or configuration file.
 
 > Live previews require Hyprland's `hyprland-toplevel-export-v1` protocol. If it is unavailable, switching and search still work; the plugin simply uses its list-only layout.
 
