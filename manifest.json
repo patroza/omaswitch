@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "piyush.window-switcher",
   "name": "Window Switcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "piyush97",
   "license": "MIT",
-  "description": "Keyboard-first window switcher overlay: type to filter, Enter to focus. Native Quickshell, no Walker dependency.",
+  "description": "Windows-style Alt-Tab overlay with MRU ordering, search, and a live preview of the selected window.",
   "kinds": [
     "overlay"
   ],

@@ -1,8 +1,13 @@
 # Omarchy Window Switcher
 
-Keyboard-first window switcher overlay for Omarchy (Quickshell).
+Windows-style Alt-Tab for Omarchy: MRU ordering, repeated-key cycling, type-to-filter search, and one live preview stream for the selected window.
 
-Type to filter, Up/Down or j/k to move, Enter to focus, Esc to close.
+## Requirements
+
+- Omarchy with the Quickshell shell
+- Hyprland with `hyprland-toplevel-export-v1` for previews
+
+Without toplevel export, switching and search still work; the preview pane stays hidden.
 
 ## Install
 
@@ -10,35 +15,55 @@ Type to filter, Up/Down or j/k to move, Enter to focus, Esc to close.
 omarchy plugin add https://github.com/piyush97/omarchy-window-switcher.git --enable
 ```
 
-Then bind a key in `~/.config/hypr/bindings.lua`:
+The repository is private, so Git must already have access to `piyush97` on GitHub.
+
+## Windows-style Alt-Tab
+
+Replace Omarchy's default direct-cycling bindings in `~/.config/hypr/bindings.lua`:
 
 ```lua
--- Replace the default SUPER+TAB (next workspace) with the switcher
-hl.unbind("SUPER + TAB")
-o.bind("SUPER + TAB", "Window switcher", "omarchy-shell shell toggle piyush.window-switcher")
+hl.unbind("ALT + TAB")
+hl.unbind("ALT + SHIFT + TAB")
+
+o.bind("ALT + TAB", "Window switcher", "omarchy-shell shell summon piyush.window-switcher '{\"mode\":\"cycle\",\"direction\":1}'")
+o.bind("ALT + SHIFT + TAB", "Window switcher (reverse)", "omarchy-shell shell summon piyush.window-switcher '{\"mode\":\"cycle\",\"direction\":-1}'")
 ```
 
-Or keep `ALT+TAB` (window cycle) and use this for the searchable picker.
+Repeated Alt+Tab cycles without resetting the overlay. Releasing Alt selects the highlighted window when Hyprland forwards the release event; Enter and clicking always work.
 
-## How it works
+For searchable-picker mode, bind any free key to:
 
-- Reads toplevels from the Quickshell `Hyprland` singleton (live, no polling)
-- Refreshes on `activewindow` / `openwindow` / `closewindow` / `workspace` events
-- Focuses via `hyprctl dispatch "hl.dsp.focus({ window = \"address:0x…\" })"` — the
-  same dispatch Omarchy's own launch-or-focus helpers use, with `focuswindow` as
-  the fallback path
+```bash
+omarchy-shell shell toggle piyush.window-switcher
+```
+
+## Controls
+
+- `Tab`, `Down`, `Right`: next window
+- `Shift+Tab`, `Up`, `Left`: previous window
+- Type: filter by title, application, or workspace
+- `Backspace`: delete; `Ctrl+Backspace`: delete a word; `Ctrl+U`: clear
+- `Enter` or click: focus
+- `Esc` or click outside: close
+
+## Implementation
+
+- Reads `Hyprland.toplevels` directly; no polling
+- Sorts by Hyprland's focus history, with the active window first
+- Uses one `ScreencopyView`, bound only to the highlighted window's Wayland handle
+- Uses native `Toplevel.activate()`, with `hyprctl focuswindow` as fallback
+- Collapses to the list-only layout until a preview frame is available
 
 ## Development
 
 ```bash
+node test_model.js
 omarchy plugin validate .
-# symlink or copy to ~/.config/omarchy/plugins/piyush.window-switcher/
 omarchy-shell shell rescanPlugins
 ```
 
-Saving files under `~/.config/omarchy/plugins/` hot-reloads the shell.
+Saving files in `~/.config/omarchy/plugins/` hot-reloads the shell.
 
-## Scope (v1)
+## Scope
 
-No thumbnails, no MRU ordering, no workspace grouping. All toplevels in one
-list, filtered by typing. Add those when the base flow is proven.
+One selected-window preview stream is intentional. Per-row streams, thumbnails for every window, and persistent history storage are omitted to keep switching fast and local.

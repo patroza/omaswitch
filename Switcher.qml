@@ -4,13 +4,14 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 // Keyboard-first window switcher overlay with a live window peek.
 //
 // Opened with `omarchy-shell shell toggle piyush.window-switcher` (bind it to
 // a key in ~/.config/hypr/bindings.lua). Lists Hyprland toplevels from the
 // Quickshell Hyprland singleton, filters live as you type, and focuses the
-// selection with a hyprctl dispatch (same call omarchy's own focus helpers use).
+// selection through the native Wayland toplevel API, with hyprctl as fallback.
 //
 // The right side shows a live preview (Windows-11-style "peek") of the
 // highlighted window via a single ScreencopyView bound to that window's
@@ -22,13 +23,13 @@ import qs.Ui
 Item {
   id: root
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
   property var manifest: null
 
   // The plugin host hides us by calling close() after removing us from
   // openPanelIds; we must not fight it, so `opened` is only our UI state.
   property bool opened: false
+  property bool cycleMode: false
   property string filterText: ""
   property int selectedIndex: 0
 
@@ -39,27 +40,30 @@ Item {
   readonly property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
   readonly property int rowHeight: Math.max(Style.space(48), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
   readonly property int contentMargin: Style.spacing.panelPadding
+  readonly property int listGap: Style.space(4)
   readonly property int gap: Style.space(12)
 
-  // The row the keyboard cursor is on; the preview follows it.
-  readonly property var selectedToplevel: rows.length > 0 ? rows[selectedIndex] : null
-  // Whether the compositor can export this window at all (has .wayland).
+  // Guard the index: assigning a shorter rows array notifies bindings before
+  // rebuildRows() gets to clamp selectedIndex.
+  readonly property var selectedToplevel: selectedIndex >= 0 && selectedIndex < rows.length ? rows[selectedIndex] : null
   readonly property bool previewWanted: root.opened && root.selectedToplevel !== null && !!root.selectedToplevel.wayland
-  // Actually showing the peek: only once the view has produced a frame.
   readonly property bool previewActive: root.previewWanted && previewView.hasContent
 
   readonly property int cardWidth: Math.min(root.previewActive ? Style.space(1080) : Style.space(760), panel.width - Style.gapsOut * 2)
+  readonly property int desiredListHeight: Math.max(root.rowHeight, rows.length * root.rowHeight)
+  readonly property int desiredCardHeight: root.contentMargin * 2 + root.headerHeight + root.listGap + root.desiredListHeight
   readonly property int cardHeight: Math.min(
-    root.previewActive
-      ? Math.max(rows.length * rowHeight + headerHeight, Style.space(400))
-      : rows.length * rowHeight + headerHeight,
+    Math.max(root.previewActive ? Style.space(400) : 0, root.desiredCardHeight),
     panel.height - Style.gapsOut * 2)
-  readonly property int contentHeight: root.cardHeight - root.contentMargin * 2
-  readonly property int listWidth: root.previewActive ? Math.max(Style.space(300), Math.round(root.cardWidth * 0.40)) : root.cardWidth - root.contentMargin * 2
-  readonly property int previewWidth: root.previewActive ? root.cardWidth - root.listWidth - root.contentMargin - root.gap : 0
-  // Pane height = the Row's height inside the card (cardHeight minus margins).
-  readonly property int previewHeight: root.contentHeight
-  readonly property int listHeight: root.contentHeight - root.headerHeight - Style.space(4)
+  readonly property int contentHeight: Math.max(0, root.cardHeight - root.contentMargin * 2)
+  readonly property int innerWidth: Math.max(0, root.cardWidth - root.contentMargin * 2)
+  readonly property int listWidth: root.previewActive ? Math.max(Style.space(300), Math.round(root.innerWidth * 0.40)) : root.innerWidth
+  readonly property int previewWidth: root.previewActive ? Math.max(0, root.innerWidth - root.listWidth - root.gap) : 0
+  readonly property int listHeight: Math.max(0, root.contentHeight - root.headerHeight - root.listGap)
+  // Positive before the pane appears, so ScreencopyView can obtain its first
+  // frame and flip hasContent without depending on a zero-sized parent.
+  readonly property int previewConstraintWidth: Math.max(1, Math.min(Style.space(580), panel.width - Style.space(420)))
+  readonly property int previewConstraintHeight: Math.max(1, Math.min(Style.space(360), panel.height - Style.gapsOut * 2 - root.contentMargin * 2))
 
   property color background: Color.menu.background
   property color foreground: Color.menu.text
@@ -71,46 +75,32 @@ Item {
   readonly property int cornerRadius: Style.cornerRadius
   property string fontFamily: Style.font.menuFamily
 
-  function windowLabel(w) {
-    return w && w.title ? String(w.title) : (w && w.appId ? String(w.appId) : "Untitled")
-  }
-
-  function windowDetail(w) {
-    if (!w) return ""
-    var detail = w.appId ? String(w.appId) : ""
-    if (w.workspace) detail += (detail ? " · " : "") + "ws " + String(w.workspace.id)
-    return detail
-  }
-
   function rebuildRows() {
-    var q = filterText.trim().toLowerCase()
-    var out = []
-    for (var i = 0; i < allWindows.length; i++) {
-      var w = allWindows[i]
-      if (!w) continue
-      var label = windowLabel(w)
-      if (q && label.toLowerCase().indexOf(q) === -1) continue
-      out.push(w)
-    }
-    rows = out
+    rows = Model.filteredWindows(allWindows, filterText)
     if (selectedIndex >= rows.length) selectedIndex = Math.max(0, rows.length - 1)
     if (selectedIndex < 0 && rows.length > 0) selectedIndex = 0
   }
 
+  function setFilter(value) {
+    filterText = value
+    selectedIndex = 0
+    rebuildRows()
+  }
+
   function refresh() {
-    allWindows = Hyprland.toplevels.values.slice()
+    allWindows = Model.sortedWindows(Hyprland.toplevels.values)
     rebuildRows()
   }
 
   function focusSelected() {
-    var w = rows[selectedIndex]
-    if (!w || !w.address) {
-      root.close()
-      return
+    var window = rows[selectedIndex]
+    if (!window) return root.dismiss()
+    if (window.wayland && typeof window.wayland.activate === "function") {
+      window.wayland.activate()
+    } else if (window.address) {
+      Quickshell.execDetached(["hyprctl", "dispatch", "focuswindow", "address:" + String(window.address)])
     }
-    var cmd = "hyprctl dispatch " + Util.shellQuote("hl.dsp.focus({ window = \"address:" + w.address + "\" })")
-    Quickshell.execDetached(cmd)
-    root.close()
+    root.dismiss()
   }
 
   function select(delta) {
@@ -119,22 +109,36 @@ Item {
   }
 
   function open(payloadJson) {
+    var payload = ({})
+    try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
+    var direction = Number(payload.direction) < 0 ? -1 : 1
+
+    // Repeated Alt+Tab summons cycle instead of resetting or closing.
+    if (root.opened && payload.mode === "cycle") {
+      root.cycleMode = true
+      root.select(direction)
+      return
+    }
+
     root.opened = true
+    root.cycleMode = payload.mode === "cycle"
     root.filterText = ""
     root.selectedIndex = 0
     root.refresh()
+    if (root.cycleMode && root.rows.length > 1 && Model.isCurrent(root.rows[0]))
+      root.selectedIndex = direction < 0 ? root.rows.length - 1 : 1
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function close() {
     root.opened = false
+    root.cycleMode = false
   }
 
-  // User-initiated dismissal (Esc / click outside). Mirrors omarchy.emojis:
-  // close() is the host contract; dismiss() also tells the shell to drop the
-  // openPanelIds entry so a later summon re-opens cleanly.
+  // User-initiated dismissal also drops the host's openPanelIds entry.
   function dismiss() {
     root.opened = false
+    root.cycleMode = false
     if (root.shell && typeof root.shell.hide === "function")
       root.shell.hide((root.manifest && root.manifest.id) || "piyush.window-switcher")
   }
@@ -145,7 +149,8 @@ Item {
     function onRawEvent(event) {
       if (!root.opened) return
       var name = event ? String(event.name || "") : ""
-      if (name === "activewindow" || name === "closewindow" || name === "openwindow" || name === "workspace") {
+      if (name === "activewindow" || name === "closewindow" || name === "openwindow" ||
+          name === "workspace" || name === "movewindow" || name.indexOf("windowtitle") === 0) {
         root.refresh()
       }
     }
@@ -188,7 +193,7 @@ Item {
         Column {
           width: root.listWidth
           height: parent.height
-          spacing: Style.space(4)
+          spacing: root.listGap
 
           Text {
             text: root.filterText === "" ? "Switch window…" : "Filter: " + root.filterText
@@ -204,7 +209,19 @@ Item {
             width: parent.width
             height: root.listHeight
             model: root.rows
+            currentIndex: root.selectedIndex
             clip: true
+
+            Text {
+              parent: listView
+              anchors.centerIn: parent
+              visible: root.rows.length === 0
+              text: root.filterText ? "No matching windows" : "No windows"
+              color: root.foreground
+              opacity: 0.6
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+            }
 
             delegate: Item {
               required property var modelData
@@ -226,7 +243,7 @@ Item {
                 spacing: 2
 
                 Text {
-                  text: root.windowLabel(modelData)
+                  text: Model.label(modelData)
                   color: index === root.selectedIndex ? root.selectedText : root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -234,7 +251,7 @@ Item {
                   width: parent.width
                 }
                 Text {
-                  text: root.windowDetail(modelData)
+                  text: Model.detail(modelData)
                   color: index === root.selectedIndex ? root.selectedText : root.foreground
                   opacity: 0.6
                   font.family: root.fontFamily
@@ -266,12 +283,12 @@ Item {
 
           ScreencopyView {
             id: previewView
-            anchors.fill: parent
-            anchors.margins: Style.space(4)
+            anchors.centerIn: parent
             captureSource: root.previewWanted ? root.selectedToplevel.wayland : null
-            live: root.opened
+            live: root.previewWanted
             paintCursor: false
-            constraintSize: Qt.size(root.previewWidth, root.previewHeight)          }
+            constraintSize: Qt.size(root.previewConstraintWidth, root.previewConstraintHeight)
+          }
         }
       }
     }
@@ -290,21 +307,26 @@ Item {
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           root.focusSelected()
           event.accepted = true
-        } else if (event.key === Qt.Key_Up || event.text === "k") {
+        } else if (event.key === Qt.Key_Backtab || event.key === Qt.Key_Up || event.key === Qt.Key_Left) {
           root.select(-1)
           event.accepted = true
-        } else if (event.key === Qt.Key_Down || event.text === "j") {
-          root.select(1)
+        } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Down || event.key === Qt.Key_Right) {
+          root.select((event.modifiers & Qt.ShiftModifier) ? -1 : 1)
           event.accepted = true
-        } else if (event.key === Qt.Key_Backspace) {
-          if (root.filterText.length > 0) {
-            root.filterText = root.filterText.slice(0, -1)
-            root.rebuildRows()
-          }
+        } else if (Util.editsFilter(event, root.filterText)) {
+          root.setFilter(Util.editedFilter(event, root.filterText))
           event.accepted = true
         } else if (event.text && event.text.length === 1 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127 && (event.modifiers === Qt.NoModifier || event.modifiers === Qt.ShiftModifier)) {
-          root.filterText += event.text
-          root.rebuildRows()
+          root.setFilter(root.filterText + event.text)
+          event.accepted = true
+        }
+      }
+
+      // Best-effort native Alt-Tab behavior. If the compositor delivers the
+      // modifier release after granting this overlay focus, commit selection.
+      Keys.onReleased: function(event) {
+        if (root.cycleMode && (event.key === Qt.Key_Alt || event.key === Qt.Key_Meta)) {
+          root.focusSelected()
           event.accepted = true
         }
       }
