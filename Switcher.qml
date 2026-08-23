@@ -244,6 +244,7 @@ Item {
 
                 Text {
                   text: Model.label(modelData)
+                  textFormat: Text.PlainText
                   color: index === root.selectedIndex ? root.selectedText : root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -252,6 +253,7 @@ Item {
                 }
                 Text {
                   text: Model.detail(modelData)
+                  textFormat: Text.PlainText
                   color: index === root.selectedIndex ? root.selectedText : root.foreground
                   opacity: 0.6
                   font.family: root.fontFamily

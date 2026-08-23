@@ -11,4 +11,6 @@ assert.equal(Model.isCurrent({ activated: false, lastIpcObject: { focusHistoryID
 assert.deepEqual(Model.filteredWindows([active, previous, old], "foot"), [previous])
 assert.deepEqual(Model.filteredWindows([active, previous, old], "notes"), [old])
 assert.equal(Model.detail(old), "obsidian · ws 3")
+assert.equal(Model.label({ title: "x".repeat(161) }), "x".repeat(159) + "…")
+assert.equal(Model.detail({ wayland: { appId: "x".repeat(161) } }), "x".repeat(159) + "…")
 console.log("Model checks passed")

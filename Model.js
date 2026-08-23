@@ -1,3 +1,10 @@
+var maxDisplayLength = 160
+
+function boundedText(value) {
+  value = String(value || "")
+  return value.length > maxDisplayLength ? value.slice(0, maxDisplayLength - 1) + "…" : value
+}
+
 function appId(window) {
   if (!window) return ""
   if (window.wayland && window.wayland.appId) return String(window.wayland.appId)
@@ -6,14 +13,14 @@ function appId(window) {
 }
 
 function label(window) {
-  return window && window.title ? String(window.title) : (appId(window) || "Untitled")
+  return boundedText(window && window.title ? window.title : (appId(window) || "Untitled"))
 }
 
 function detail(window) {
   if (!window) return ""
   var value = appId(window)
   if (window.workspace) value += (value ? " · " : "") + "ws " + String(window.workspace.id)
-  return value
+  return boundedText(value)
 }
 
 function historyRank(window) {
