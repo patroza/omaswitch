@@ -95,10 +95,11 @@ Item {
   function focusSelected() {
     var window = rows[selectedIndex]
     if (!window) return root.dismiss()
-    if (window.wayland && typeof window.wayland.activate === "function") {
+    var command = Model.focusCommand(window)
+    if (command) {
+      Quickshell.execDetached(["sh", "-c", command])
+    } else if (window.wayland && typeof window.wayland.activate === "function") {
       window.wayland.activate()
-    } else if (window.address) {
-      Quickshell.execDetached(["hyprctl", "dispatch", "focuswindow", "address:" + String(window.address)])
     }
     root.dismiss()
   }
