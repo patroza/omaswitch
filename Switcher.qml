@@ -54,6 +54,13 @@ Item {
   readonly property int contentMargin: Style.spacing.panelPadding
   readonly property int listGap: Style.space(4)
   readonly property int gap: Style.space(12)
+  // Match niri's recent-windows renderer. It reserves highlight padding for
+  // every thumbnail, even though the gray ghost is drawn only for selection.
+  readonly property int niriThumbnailGap: 16
+  readonly property int niriTitleGap: 14
+  readonly property int niriHighlightPadding: 30
+  readonly property int niriHighlightBorder: 2
+  readonly property int previewSpacing: niriThumbnailGap + (niriHighlightPadding + niriHighlightBorder) * 2
 
   // Guard the index: assigning a shorter rows array notifies bindings before
   // rebuildRows() gets to clamp selectedIndex.
@@ -84,10 +91,10 @@ Item {
   // frame and flip hasContent without depending on a zero-sized parent.
   readonly property int previewConstraintWidth: Math.max(1, Math.min(Style.space(580), panel.width - Style.space(420)))
   readonly property int previewConstraintHeight: Math.max(1, Math.min(Style.space(360), panel.height - Style.gapsOut * 2 - root.contentMargin * 2))
-  readonly property int previewCaptionHeight: Math.max(Style.space(42), Style.font.body + Style.font.caption + Style.space(8))
+  readonly property int previewCaptionHeight: root.niriTitleGap + Style.font.body
   readonly property int previewAreaHeight: Math.max(1, root.contentHeight - root.previewCaptionHeight - Style.space(8))
   readonly property int previewMinimumWidth: Math.max(Style.space(180), Math.round(root.innerWidth * 0.12))
-  readonly property int previewMaximumWidth: Math.max(root.previewMinimumWidth, Math.round((root.innerWidth - root.gap * 2) / 3))
+  readonly property int previewMaximumWidth: Math.max(root.previewMinimumWidth, Math.round((root.innerWidth - root.previewSpacing * 2) / 3))
   readonly property int previewStripContentWidth: root.previewWidthsTotal()
   readonly property int previewStripInset: Math.max(0, Math.round((root.innerWidth - root.previewStripContentWidth) / 2))
 
@@ -140,8 +147,8 @@ Item {
     if (!root.stripLayout || visualStrip.count <= 0) return
     var before = 0
     var after = 0
-    for (var i = 0; i < root.selectedIndex; i++) before += root.previewWidthFor(root.rows[i]) + root.gap
-    for (var j = root.selectedIndex + 1; j < root.rows.length; j++) after += root.previewWidthFor(root.rows[j]) + root.gap
+    for (var i = 0; i < root.selectedIndex; i++) before += root.previewWidthFor(root.rows[i]) + root.previewSpacing
+    for (var j = root.selectedIndex + 1; j < root.rows.length; j++) after += root.previewWidthFor(root.rows[j]) + root.previewSpacing
     var selectedWidth = root.previewWidthFor(root.rows[root.selectedIndex])
     var sideSpace = Math.max(0, (visualStrip.width - selectedWidth) / 2)
     var canCenter = before >= sideSpace && after >= sideSpace
@@ -158,7 +165,7 @@ Item {
 
   function previewWidthsTotal() {
     if (!root.rows || root.rows.length === 0) return 0
-    var total = (root.rows.length - 1) * root.gap
+    var total = (root.rows.length - 1) * root.previewSpacing
     for (var i = 0; i < root.rows.length; i++) total += root.previewWidthFor(root.rows[i])
     return total
   }
@@ -575,7 +582,7 @@ Item {
           width: root.stripLayout ? root.innerWidth : 0
           height: parent.height
           orientation: ListView.Horizontal
-          spacing: root.gap
+          spacing: root.previewSpacing
           clip: true
           model: root.rows
           currentIndex: root.selectedIndex
@@ -589,17 +596,25 @@ Item {
             width: root.previewWidthFor(modelData)
             height: visualStrip.height
             z: index === root.selectedIndex ? 2 : (index === root.hoveredIndex ? 1 : 0)
-            scale: index === root.selectedIndex ? 1.06 : (index === root.hoveredIndex ? 1.025 : 1)
-            transformOrigin: Item.Center
 
-            Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+            Rectangle {
+              // Niri's active highlight is a gray background behind the
+              // preview and title, extended by 30 logical pixels. The slot
+              // spacing above reserves this room even while unselected.
+              anchors.fill: previewColumn
+              anchors.margins: -root.niriHighlightPadding
+              visible: index === root.selectedIndex || index === root.hoveredIndex
+              color: index === root.selectedIndex ? "#999999" : Qt.rgba(0.6, 0.6, 0.6, 0.45)
+              border.color: color
+              border.width: root.niriHighlightBorder
+            }
 
             Column {
               id: previewColumn
               width: parent.width
-              height: root.previewHeightFor(modelData) + root.previewCaptionHeight + spacing
+              height: root.previewHeightFor(modelData) + root.previewCaptionHeight
               anchors.centerIn: parent
-              spacing: Style.space(8)
+              spacing: root.niriTitleGap
 
               Item {
                 width: parent.width
@@ -615,15 +630,6 @@ Item {
                   constraintSize: Qt.size(Math.max(1, width), Math.max(1, height))
                 }
 
-                Rectangle {
-                  anchors.fill: stripPreview
-                  color: "transparent"
-                  border.color: index === root.selectedIndex
-                    ? Qt.rgba(1, 1, 1, 0.92)
-                    : (index === root.hoveredIndex ? Qt.rgba(1, 1, 1, 0.55) : "transparent")
-                  border.width: index === root.selectedIndex ? Math.max(2, Style.space(2))
-                    : (index === root.hoveredIndex ? Math.max(1, Style.space(1)) : 0)
-                }
               }
 
               Text {
@@ -634,17 +640,6 @@ Item {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
                 font.bold: index === root.selectedIndex || index === root.hoveredIndex
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-              }
-              Text {
-                width: parent.width
-                text: Model.detail(modelData) + (root.filterText ? " · filter: " + root.filterText : "")
-                textFormat: Text.PlainText
-                color: "white"
-                opacity: index === root.selectedIndex || index === root.hoveredIndex ? 0.8 : 0.55
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
               }
