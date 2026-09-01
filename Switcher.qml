@@ -606,6 +606,7 @@ Item {
                 clip: true
 
                 ScreencopyView {
+                  id: stripPreview
                   anchors.centerIn: parent
                   captureSource: modelData && modelData.wayland ? modelData.wayland : null
                   live: root.opened && !!captureSource
@@ -614,7 +615,7 @@ Item {
                 }
 
                 Rectangle {
-                  anchors.fill: parent
+                  anchors.fill: stripPreview
                   color: "transparent"
                   border.color: index === root.selectedIndex
                     ? Qt.rgba(1, 1, 1, 0.92)
