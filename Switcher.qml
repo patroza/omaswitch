@@ -636,7 +636,9 @@ Item {
           delegate: Item {
             required property var modelData
             required property int index
-            width: root.previewWidthFor(modelData)
+            readonly property int thumbnailWidth: root.previewWidthFor(modelData)
+            readonly property int thumbnailHeight: root.previewHeightFor(modelData)
+            width: thumbnailWidth
             height: visualStrip.height
             z: index === root.selectedIndex ? 2 : (index === root.hoveredIndex ? 1 : 0)
 
@@ -660,13 +662,16 @@ Item {
             Column {
               id: previewColumn
               width: parent.width
-              height: root.previewHeightFor(modelData) + root.previewCaptionHeight
-              anchors.centerIn: parent
+              height: thumbnailHeight + root.previewCaptionHeight
+              x: 0
+              // Niri centers the window geometry itself. The title hangs below
+              // that geometry instead of participating in the centering box.
+              y: Math.round((parent.height - thumbnailHeight) / 2)
               spacing: root.niriTitleGap
 
               Item {
                 width: parent.width
-                height: root.previewHeightFor(modelData)
+                height: thumbnailHeight
                 clip: true
 
                 ScreencopyView {
