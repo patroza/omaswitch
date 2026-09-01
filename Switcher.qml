@@ -595,6 +595,7 @@ Item {
             Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
 
             Column {
+              id: previewColumn
               width: parent.width
               height: root.previewHeightFor(modelData) + root.previewCaptionHeight + spacing
               anchors.centerIn: parent
@@ -607,11 +608,11 @@ Item {
 
                 ScreencopyView {
                   id: stripPreview
-                  anchors.centerIn: parent
+                  anchors.fill: parent
                   captureSource: modelData && modelData.wayland ? modelData.wayland : null
                   live: root.opened && !!captureSource
                   paintCursor: false
-                  constraintSize: Qt.size(Math.max(1, parent.width), Math.max(1, parent.height))
+                  constraintSize: Qt.size(Math.max(1, width), Math.max(1, height))
                 }
 
                 Rectangle {
@@ -650,7 +651,7 @@ Item {
             }
 
             MouseArea {
-              anchors.fill: parent
+              anchors.fill: previewColumn
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onEntered: root.hoveredIndex = index
