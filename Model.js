@@ -23,6 +23,20 @@ function detail(window) {
   return boundedText(value)
 }
 
+function aspectRatio(window) {
+  var ipc = window && window.lastIpcObject ? window.lastIpcObject : {}
+  var size = ipc.size
+  var width = Array.isArray(size) ? Number(size[0]) : Number(size && (size.x || size.width))
+  var height = Array.isArray(size) ? Number(size[1]) : Number(size && (size.y || size.height))
+  if (!(width > 0) || !(height > 0)) return 16 / 9
+  return Math.max(0.35, Math.min(3.2, width / height))
+}
+
+function previewWidth(window, availableHeight, minimumWidth, maximumWidth) {
+  var natural = Math.round(Math.max(1, Number(availableHeight) || 1) * aspectRatio(window))
+  return Math.max(Number(minimumWidth) || 1, Math.min(Number(maximumWidth) || natural, natural))
+}
+
 // Hyprland's focusHistoryID is a rank in the compositor's global focus-history
 // list: 0 = currently focused, 1 = most recent before that, ascending = older.
 // Transient/popup windows not meaningfully in that history can report null or
@@ -45,7 +59,10 @@ function isCurrent(window) {
 }
 
 function focusRank(window) {
-  return isCurrent(window) ? -1 : historyRank(window)
+  // Do not boost `activated`: Electron clients often leave that flag set on
+  // several windows at once, which scrambled MRU order. Rank is compositor
+  // focusHistoryID only.
+  return historyRank(window)
 }
 
 function sortedWindows(values) {
@@ -83,12 +100,70 @@ function focusCommand(window) {
     "' })\" >/dev/null 2>&1 || hyprctl dispatch focuswindow \"address:" + address + "\""
 }
 
+function normalizeAddress(value) {
+  var a = String(value || "").toLowerCase()
+  if (a && a.indexOf("0x") !== 0) a = "0x" + a
+  return a
+}
+
+function mruPush(out, seen, value) {
+  var a = normalizeAddress(value)
+  if (!a || seen[a]) return
+  seen[a] = true
+  out.push(a)
+}
+
+// Commit only: move `to` to front and `from` to second. Skipped windows keep
+// their relative order — Hyprland's focusHistoryID cannot un-record a peek.
+function mruBump(order, fromAddr, toAddr) {
+  var out = []
+  var seen = ({})
+  mruPush(out, seen, toAddr)
+  mruPush(out, seen, fromAddr)
+  if (order) {
+    for (var i = 0; i < order.length; i++) mruPush(out, seen, order[i])
+  }
+  return out
+}
+
+// Trust our commit-order while the compositor's current window still matches.
+// If the user focused something outside Alt+Tab, take Hyprland's list instead.
+function mruMerge(ours, hypr) {
+  var compositor = []
+  var oursNorm = []
+  var seenHypr = ({})
+  var seenOurs = ({})
+  var i
+  if (hypr) {
+    for (i = 0; i < hypr.length; i++) mruPush(compositor, seenHypr, hypr[i])
+  }
+  if (ours) {
+    for (i = 0; i < ours.length; i++) mruPush(oursNorm, seenOurs, ours[i])
+  }
+  if (!compositor.length) return oursNorm
+  if (!oursNorm.length || oursNorm[0] !== compositor[0]) return compositor
+  var inHypr = ({})
+  for (i = 0; i < compositor.length; i++) inHypr[compositor[i]] = true
+  var out = []
+  var seen = ({})
+  for (i = 0; i < oursNorm.length; i++) {
+    if (inHypr[oursNorm[i]]) mruPush(out, seen, oursNorm[i])
+  }
+  for (i = 0; i < compositor.length; i++) mruPush(out, seen, compositor[i])
+  return out
+}
+
 if (typeof module !== "undefined") module.exports = {
   appId: appId,
   label: label,
   detail: detail,
+  aspectRatio: aspectRatio,
+  previewWidth: previewWidth,
   isCurrent: isCurrent,
   sortedWindows: sortedWindows,
   filteredWindows: filteredWindows,
-  focusCommand: focusCommand
+  focusCommand: focusCommand,
+  normalizeAddress: normalizeAddress,
+  mruBump: mruBump,
+  mruMerge: mruMerge
 }
