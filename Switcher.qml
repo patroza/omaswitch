@@ -97,8 +97,13 @@ Item {
   readonly property int previewConstraintHeight: Math.max(1, Math.min(Style.space(360), panel.height - Style.gapsOut * 2 - root.contentMargin * 2))
   readonly property int previewCaptionHeight: root.niriTitleGap + Style.font.body
   readonly property int previewAreaHeight: Math.max(1, root.contentHeight - root.previewCaptionHeight - Style.space(8))
-  readonly property int previewMinimumWidth: Math.max(Style.space(180), Math.round(root.innerWidth * 0.12))
-  readonly property int previewMaximumWidth: Math.max(root.previewMinimumWidth, Math.round((root.innerWidth - root.previewSpacing * 2) / 3))
+  // Niri defaults: previews never grow beyond half their original logical
+  // size or 480 logical pixels tall. This keeps genuinely small windows small.
+  readonly property real previewMaxScale: 0.5
+  readonly property int previewMaximumHeight: Math.max(1, Math.min(root.previewAreaHeight,
+                                                                    Style.space(480),
+                                                                    Math.round(panel.height * root.previewMaxScale)))
+  readonly property int previewMaximumWidth: Math.max(1, Math.round(root.previewMaximumHeight * panel.width / Math.max(1, panel.height)))
   readonly property int previewStripContentWidth: root.previewWidthsTotal()
   readonly property int previewStripInset: Math.max(0, Math.round((root.innerWidth - root.previewStripContentWidth) / 2))
 
@@ -161,15 +166,26 @@ Item {
 
   function previewWidthFor(window) {
     var aspect = root.previewAspectFor(window)
-    return Math.max(root.previewMinimumWidth,
-                    Math.min(root.previewMaximumWidth,
-                             Math.round(root.previewAreaHeight * aspect)))
+    var dimensions = root.windowDimensions(window)
+    if (!dimensions) return Math.max(16, Math.min(root.previewMaximumWidth,
+                                                  Math.round(root.previewMaximumHeight * aspect)))
+    var scale = Math.min(root.previewMaxScale,
+                         root.previewMaximumWidth / dimensions.width,
+                         root.previewMaximumHeight / dimensions.height)
+    return Math.max(16, Math.round(dimensions.width * scale))
   }
 
   function previewHeightFor(window) {
     var aspect = root.previewAspectFor(window)
-    return Math.min(root.previewAreaHeight,
-                    Math.max(1, Math.round(root.previewWidthFor(window) / aspect)))
+    return Math.max(1, Math.round(root.previewWidthFor(window) / aspect))
+  }
+
+  function windowDimensions(window) {
+    var ipc = window && window.lastIpcObject ? window.lastIpcObject : null
+    var size = ipc ? ipc.size : null
+    var width = Array.isArray(size) ? Number(size[0]) : Number(size && (size.x || size.width))
+    var height = Array.isArray(size) ? Number(size[1]) : Number(size && (size.y || size.height))
+    return width > 0 && height > 0 ? { width: width, height: height } : null
   }
 
   function previewAspectFor(window) {
@@ -628,8 +644,13 @@ Item {
               // Niri's active highlight is a gray background behind the
               // preview and title, extended by 30 logical pixels. The slot
               // spacing above reserves this room even while unselected.
-              anchors.fill: previewColumn
-              anchors.margins: -root.niriHighlightPadding
+              x: previewColumn.x - root.niriHighlightPadding
+              y: previewColumn.y - root.niriHighlightPadding
+              width: previewColumn.width + root.niriHighlightPadding * 2
+              // Niri shortens the title-bearing highlight by half the bottom
+              // padding, which avoids a heavy gray shelf under wide windows.
+              height: previewColumn.height + root.niriHighlightPadding * 2
+                      - Math.round(root.niriHighlightPadding / 2)
               visible: index === root.selectedIndex || index === root.hoveredIndex
               color: index === root.selectedIndex ? "#999999" : Qt.rgba(0.6, 0.6, 0.6, 0.45)
               border.color: color
