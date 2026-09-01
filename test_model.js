@@ -11,6 +11,10 @@ assert.equal(Model.isCurrent({ activated: false, lastIpcObject: { focusHistoryID
 assert.deepEqual(Model.filteredWindows([active, previous, old], "foot"), [previous])
 assert.deepEqual(Model.filteredWindows([active, previous, old], "notes"), [old])
 assert.equal(Model.detail(old), "obsidian · ws 3")
+assert.equal(Model.aspectRatio({ lastIpcObject: { size: [1920, 1080] } }), 16 / 9)
+assert.equal(Model.aspectRatio({ lastIpcObject: { size: { x: 900, y: 1600 } } }), 0.5625)
+assert.equal(Model.previewWidth({ lastIpcObject: { size: [900, 1600] } }, 600, 180, 540), 338)
+assert.equal(Model.previewWidth({ lastIpcObject: { size: [1920, 1080] } }, 600, 180, 540), 540)
 assert.equal(Model.label({ title: "x".repeat(161) }), "x".repeat(159) + "…")
 assert.equal(Model.detail({ wayland: { appId: "x".repeat(161) } }), "x".repeat(159) + "…")
 
@@ -59,3 +63,37 @@ assert.equal(Model.isCurrent(staleEmpty), false, "empty focusHistoryID must not 
 assert.equal(Model.isCurrent({ activated: false, lastIpcObject: {} }), false, "missing focusHistoryID must not be current")
 assert.equal(Model.isCurrent(editorCur), true, "activated window must be current")
 assert.equal(Model.isCurrent({ activated: false, lastIpcObject: { focusHistoryID: 0 } }), true, "real rank 0 must be current")
+
+const staleActivated = { title: "StaleActive", activated: true, lastIpcObject: { focusHistoryID: 5 } }
+const realRecent = { title: "Recent", activated: false, lastIpcObject: { focusHistoryID: 1 } }
+assert.deepEqual(
+  Model.sortedWindows([staleActivated, realRecent]).map(function(w) { return w.title }),
+  ["Recent", "StaleActive"],
+  "activated must not outrank a better focusHistoryID"
+)
+
+// --- commit-only MRU: skipped windows must not become previous ---
+const C = "0xc"
+const T = "0xt3"
+const D = "0xd"
+let mru = [C, T, D]
+mru = Model.mruBump(mru, C, T)
+mru = Model.mruBump(mru, T, C)
+assert.deepEqual(mru, [C, T, D], "chromium ↔ t3 ping-pong")
+mru = Model.mruBump(mru, C, D)
+assert.deepEqual(mru, [D, C, T], "skip t3, commit discord")
+mru = Model.mruBump(mru, D, C)
+assert.deepEqual(mru, [C, D, T], "tab back to chromium; next is discord not t3")
+assert.deepEqual(
+  Model.mruMerge([D, C, T], [D, T, C]),
+  [D, C, T],
+  "peek-polluted hypr focusHistory must not override commit order"
+)
+assert.deepEqual(
+  Model.mruMerge([D, C, T], [T, D, C]),
+  [T, D, C],
+  "clicking t3 takes compositor order"
+)
+assert.deepEqual(Model.mruMerge([], [C, T, D]), [C, T, D], "empty ours seeds from hypr")
+assert.equal(Model.normalizeAddress("abc"), "0xabc")
+assert.equal(Model.normalizeAddress("0xAbC"), "0xabc")
