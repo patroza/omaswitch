@@ -48,6 +48,10 @@ Item {
   // Raw toplevels (live objects from the Hyprland singleton) + filtered rows.
   property var allWindows: []
   property var rows: []
+  // Filled by each ScreencopyView once its first frame arrives.  Hyprland's
+  // client geometry is only a bootstrap value; the capture is authoritative
+  // for the space a preview occupies in the strip.
+  property var capturedAspects: ({})
 
   readonly property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
   readonly property int rowHeight: Math.max(Style.space(48), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
@@ -156,11 +160,34 @@ Item {
   }
 
   function previewWidthFor(window) {
-    return Model.previewWidth(window, root.previewAreaHeight, root.previewMinimumWidth, root.previewMaximumWidth)
+    var aspect = root.previewAspectFor(window)
+    return Math.max(root.previewMinimumWidth,
+                    Math.min(root.previewMaximumWidth,
+                             Math.round(root.previewAreaHeight * aspect)))
   }
 
   function previewHeightFor(window) {
-    return Math.min(root.previewAreaHeight, Math.max(1, Math.round(root.previewWidthFor(window) / Model.aspectRatio(window))))
+    var aspect = root.previewAspectFor(window)
+    return Math.min(root.previewAreaHeight,
+                    Math.max(1, Math.round(root.previewWidthFor(window) / aspect)))
+  }
+
+  function previewAspectFor(window) {
+    var address = window ? root.normAddr(window.address) : ""
+    var captured = address ? root.capturedAspects[address] : 0
+    return captured > 0 ? captured : Model.aspectRatio(window)
+  }
+
+  function rememberCapturedAspect(window, size) {
+    if (!window || !size || size.width <= 0 || size.height <= 0) return
+    var aspect = Math.max(0.35, Math.min(3.2, size.width / size.height))
+    var address = root.normAddr(window.address)
+    if (!address || Math.abs((root.capturedAspects[address] || 0) - aspect) < 0.001) return
+    // Replace the object so every width/content-width binding is reevaluated.
+    var next = Object.assign({}, root.capturedAspects)
+    next[address] = aspect
+    root.capturedAspects = next
+    Qt.callLater(root.positionVisualStrip)
   }
 
   function previewWidthsTotal() {
@@ -464,7 +491,7 @@ Item {
 
     Rectangle {
       anchors.fill: parent
-      color: root.stripLayout ? Qt.rgba(0, 0, 0, 0.72) : root.scrim
+      color: root.stripLayout ? Qt.rgba(0, 0, 0, 0.8) : root.scrim
     }
 
     MouseArea {
@@ -628,6 +655,10 @@ Item {
                   live: root.opened && !!captureSource
                   paintCursor: false
                   constraintSize: Qt.size(Math.max(1, width), Math.max(1, height))
+                  onSourceSizeChanged: root.rememberCapturedAspect(modelData, sourceSize)
+                  onHasContentChanged: {
+                    if (hasContent) root.rememberCapturedAspect(modelData, sourceSize)
+                  }
                 }
 
               }
